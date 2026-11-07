@@ -3,6 +3,7 @@ import threading
 import time
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -19,7 +20,8 @@ def watch_news(token, chat_id):
     seen = None
     while True:
         try:
-            with urlopen(FEED, timeout=20) as response:
+            feed_request = Request(FEED, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/rss+xml, text/xml, */*"})
+            with urlopen(feed_request, timeout=20) as response:
                 entries = ET.fromstring(response.read()).findall("./channel/item")
             articles = {
                 item.findtext("link"): item.findtext("title", "").strip()
@@ -40,6 +42,9 @@ def watch_news(token, chat_id):
                     )
                     with urlopen(request, timeout=20):
                         seen.add(link)
+        except HTTPError as error:
+            service = "Telegram" if "api.telegram.org" in error.url else "Federal Reserve"
+            print(f"{service} returned HTTP {error.code}. Retrying.", flush=True)
         except (OSError, ET.ParseError) as error:
             print(f"News check failed ({type(error).__name__}). Retrying.", flush=True)
         time.sleep(60)
