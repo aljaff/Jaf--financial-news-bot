@@ -53,16 +53,6 @@ def watch_news(token, chat_id):
 if __name__ == "__main__":
     token = os.environ["TELEGRAM_BOT_TOKEN"]
     chat_id = os.environ["TELEGRAM_CHAT_ID"]
-    if time.time() < 1794057475:
-        try:
-            data = urlencode({"chat_id": chat_id, "text": "رسالة اختبار من بوت الأخبار المالية ✅"}).encode()
-            request = Request(f"https://api.telegram.org/bot{token}/sendMessage", data=data)
-            with urlopen(request, timeout=15):
-                print("Telegram test message accepted.", flush=True)
-        except HTTPError as error:
-            print(f"Telegram test returned HTTP {error.code}.", flush=True)
-        except OSError:
-            print("Telegram test connection failed.", flush=True)
     with ThreadingHTTPServer(("0.0.0.0", int(os.getenv("PORT", "10000"))), HealthHandler) as server:
         threading.Thread(target=watch_news, args=(token, chat_id), daemon=True).start()
         server.serve_forever()
