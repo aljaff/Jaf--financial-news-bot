@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -13,8 +14,34 @@ KEYWORDS = (
     "شركات الصرافة في اقليم كوردستان", "الحوالات المالية", "سعر الصرف",
     "الدينار العراقي", "الدفع الالكتروني", "بطاقات الدفع الالكتروني",
     "منافذ صرف الرواتب", "السياسة النقدية", "الموازنة العراقية",
-    "Iraqi Dinar", "CBI", "Monetary Policy",
+    "Iraqi Dinar", "CBI", "Monetary Policy", "السياسة المالية",
 )
+
+IRAQ = r"عراق\w*|كوردستان|كردستان|بغداد|اربيل|بصرة|سليمانية|دهوك|iraq\w*|kurdistan|baghdad|erbil|iqd"
+FINANCE = (
+    r"دينار\w*|دولار\w*|صرف\w*|صراف\w*|مصرف\w*|بنك\w*|بنوك|حوال\w*|"
+    r"مالي\w*|نقدي\w*|موازن\w*|رواتب|دفع|خزان\w*|فيدرال\w*|عقوب\w*|"
+    r"dinar|dollar|exchange|bank\w*|financ\w*|monetary|fiscal|treasury|"
+    r"federal reserve|sanctions|iqd"
+)
+
+
+def iraqi_financial_news(title):
+    # Google News appends the publisher after the headline.
+    headline = title.rsplit(" - ", 1)[0].lower()
+    headline = re.sub(r"[\u064b-\u065f\u0670ـ]", "", headline)
+    headline = headline.translate(str.maketrans("أإآى", "اااي"))
+    headline = re.sub(r"\b(?:وال|بال|لل|ال)(?=\w{3})", "", headline)
+    other_currency = re.search(
+        r"\b(?:ليرة|يورو|ين|زلوتي|ريال|جنيه|lira|euro|yen|zloty|riyal|rial)\b",
+        headline,
+    )
+    if other_currency and not re.search(r"\b(?:دينار|dinar|iqd)\b", headline):
+        return False
+    return (
+        re.search(rf"\b(?:{IRAQ})\b", headline)
+        and re.search(rf"\b(?:{FINANCE})\b", headline)
+    )
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -33,9 +60,9 @@ def watch_news(token, chat_id):
             articles = {
                 item.findtext("link"): item.findtext("title", "").strip()
                 for item in reversed(entries)
-                if item.findtext("link") and item.findtext("title")
+                if item.findtext("link") and iraqi_financial_news(item.findtext("title", ""))
             }
-            if seen is None and articles:
+            if seen is None:
                 seen = set(articles)
                 print("Federal Reserve feed loaded.", flush=True)
             if seen is not None:
@@ -61,7 +88,8 @@ def watch_headlines(token, chat_id):
     while True:
         for index, words in enumerate(groups):
             query = urlencode({
-                "q": " OR ".join(f'"{word}"' for word in words) + " when:2d",
+                "q": '("العراق" OR "الدينار العراقي" OR "كوردستان" OR "كردستان" OR "Iraq") ('
+                + " OR ".join(f'"{word}"' for word in words) + ") when:2d",
                 "hl": "ar", "gl": "IQ", "ceid": "IQ:ar",
             })
             try:
@@ -74,7 +102,7 @@ def watch_headlines(token, chat_id):
                 articles = {
                     item.findtext("link"): item.findtext("title", "").strip()
                     for item in reversed(entries)
-                    if item.findtext("link") and item.findtext("title")
+                    if item.findtext("link") and iraqi_financial_news(item.findtext("title", ""))
                 }
                 if index not in initialized:
                     seen.update(articles)
